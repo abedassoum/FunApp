@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, TextInput, Button, View, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -11,17 +12,23 @@ export default function IndexScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [noteIndex, setNoteIndex] = useState<number | null>(null);
 
-  const addNote = () => {
+  useEffect(() => {
+    loadNotes();
+  }, []);
+
+  const addNote = async () => {
     if (note.trim()) {
+      let updatedNotes;
       if (isEditing && noteIndex !== null) {
-        const updatedNotes = [...notes];
+        updatedNotes = [...notes];
         updatedNotes[noteIndex] = note;
-        setNotes(updatedNotes);
         setIsEditing(false);
         setNoteIndex(null);
       } else {
-        setNotes([...notes, note]);
+        updatedNotes = [...notes, note];
       }
+      setNotes(updatedNotes);
+      saveNotes(updatedNotes);
       setNote('');
     }
   };
@@ -37,9 +44,10 @@ export default function IndexScreen() {
         },
         {
           text: "Delete",
-          onPress: () => {
+          onPress: async () => {
             const updatedNotes = notes.filter((_, i) => i !== index);
             setNotes(updatedNotes);
+            saveNotes(updatedNotes);
           },
           style: "destructive"
         }
@@ -51,6 +59,25 @@ export default function IndexScreen() {
     setNoteIndex(index);
     setNote(notes[index]);
     setIsEditing(true);
+  };
+
+  const saveNotes = async (notes: string[]) => {
+    try {
+      await AsyncStorage.setItem('notes', JSON.stringify(notes));
+    } catch (error) {
+      console.error('Failed to save notes:', error);
+    }
+  };
+
+  const loadNotes = async () => {
+    try {
+      const savedNotes = await AsyncStorage.getItem('notes');
+      if (savedNotes) {
+        setNotes(JSON.parse(savedNotes));
+      }
+    } catch (error) {
+      console.error('Failed to load notes:', error);
+    }
   };
 
   return (
@@ -80,12 +107,14 @@ export default function IndexScreen() {
               <Text style={styles.note}>
                 {index + 1}. {n}
               </Text>
-              <TouchableOpacity style={styles.editButton} onPress={() => editNote(index)}>
-                <Text style={styles.buttonText}>Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.deleteButton} onPress={() => deleteNote(index)}>
-                <Text style={styles.buttonText}>Delete</Text>
-              </TouchableOpacity>
+              <View style={styles.noteActions}>
+                <TouchableOpacity style={styles.editButton} onPress={() => editNote(index)}>
+                  <Text style={styles.buttonText}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.deleteButton} onPress={() => deleteNote(index)}>
+                  <Text style={styles.buttonText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ))}
         </ThemedView>
@@ -148,17 +177,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   noteContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
     marginBottom: 8,
     padding: 10,
     backgroundColor: '#f9f9f9',
     borderRadius: 4,
   },
   note: {
-    flex: 1,
     fontSize: 16,
+    marginBottom: 8,
+  },
+  noteActions: {
+    flexDirection: 'row',
   },
   headerImage: {
     color: '#808080',
